@@ -287,11 +287,10 @@ def prettify(meals: dict, start: float) -> str:
     html = f"{css}\t<body>\n"
 
     for info in meals:
-        meal = info["obj"][
-            next(iter(info["obj"]))
-        ]  # where meal is elements of hhursev recipe-scraper object dict
+        # get elements of hhursev recipe-scraper object dict
+        elements = info["obj"][next(iter(info["obj"]))]
 
-        title = meal["title"]
+        title = elements["title"]
         if info["type"] == "combo_main":
             title = f"Main: {title}"
         elif info["type"] == "combo_side":
@@ -299,21 +298,21 @@ def prettify(meals: dict, start: float) -> str:
         title = '\t\t<div class="card">\n' f"\t\t\t<h1>{title}</h1>\n"
 
         try:
-            servings = f'\t\t\t<i>{meal["yields"]}'
+            servings = f'\t\t\t<i>{elements["yields"]}'
         except Exception:
             servings = "\t\t\t<i>servings unknown"
 
-        host = f' | {meal["site_name"]}</i>'
+        host = f' | {elements["site_name"]}</i>'
 
         title_servings = title + servings + host
 
         image = (
             '<div class="polaroid">\n'
-            f'\t\t\t\t<img src={meal["image"]} alt="{meal["title"]} from {meal["host"]}" />\n'
+            f'\t\t\t\t<img src={elements["image"]} alt="{elements["title"]} from {elements["host"]}" />\n'
             "\t\t\t</div>"
         )
 
-        ingredients = ["\t\t\t\t<li>" + i + "</li>" for i in meal["ingredients"]]
+        ingredients = ["\t\t\t\t<li>" + i + "</li>" for i in elements["ingredients"]]
         ingredients = "\n".join(ingredients)
         ingredients = (
             "\t\t\t<h2>Ingredients</h2>\n" f"\t\t\t<ul>\n{ingredients}\n\t\t\t</ul>"
@@ -321,7 +320,7 @@ def prettify(meals: dict, start: float) -> str:
 
         instructions = (
             "\t\t\t<h2>Instructions</h2>\n"
-            f'\t\t\t<p>{meal["instructions"]}</p>\n\t\t</div>\n'
+            f'\t\t\t<p>{elements["instructions"]}</p>\n\t\t</div>\n'
         )
 
         container = "\n".join([title_servings, image, ingredients, instructions])
@@ -373,7 +372,7 @@ def mailer(content: str, debug_mode: bool) -> NoReturn:
 
 
 # START TIMER
-start_time = time.time()
+START_TIME = time.time()
 
 # FILENAME CONSTANTS
 unused_mains_filename = "unused_mains_recipes.json"
@@ -381,11 +380,11 @@ unused_sides_filename = "unused_sides_recipes.json"
 failed_filename = "failed_recipes.json"
 used_filename = "used_recipes.json"
 
-debug_mode = check_debug_mode()
-if debug_mode:
-    selection = debug_list_selection()
+DEBUG_MODE = check_debug_mode()
+if DEBUG_MODE:
+    SELECTION = debug_list_selection()
     # redifine websites list for debug session
-    websites = {"debugging": selection}
+    websites = {"debugging": SELECTION}
     unused_main_recipes, unused_side_recipes, scraped_mains, scraped_sides = (
         {},
         {},
@@ -416,30 +415,30 @@ else:
 
     # ENSURE MEALS HAVE ADEQUATE VEGGIES OR ADD A SIDE
     print("Checking for veggies")
-    meals = veggie_checker(randomized_meals, unused_side_recipes)
+    MEALS = veggie_checker(randomized_meals, unused_side_recipes)
 
     # PRETTYIFY THE MEALS INTO EMAILABLE HTML BODY
     print("Prettifying meals into HTML")
-    pretty = prettify(meals, start_time)
+    PRETTY = prettify(MEALS, START_TIME)
 
     # SEND EMAIL
     print("Emailing recipients")
-    mailer(pretty, debug_mode)
+    mailer(PRETTY, DEBUG_MODE)
 
     # UPDATE THE RESOURCE FILES BEFORE SAVING OUT
     date = datetime.today().strftime("%Y-%m-%d")
-    for meal in meals:
+    for MEAL in MEALS:
         try:
-            url = next(iter(meal["obj"]))
-            used_recipes[url] = date
+            URL = next(iter(MEAL["obj"]))
+            used_recipes[URL] = date
             if url in unused_main_recipes:
-                del unused_main_recipes[url]
+                del unused_main_recipes[URL]
             elif url in unused_side_recipes:
-                del unused_side_recipes[url]
+                del unused_side_recipes[URL]
             else:
                 raise KeyError
         except KeyError:
-            print(f"{url} was not in the main or side lists, so not removing")
+            print(f"{URL} was not in the main or side lists, so not removing")
     print(
         f"main {len(unused_main_recipes)} final\nside {len(unused_side_recipes)} final"
     )
