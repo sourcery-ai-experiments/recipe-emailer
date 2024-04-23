@@ -43,12 +43,12 @@ websites = {
             'main course' : 'https://www.paleorunningmomma.com/course/dinner/',
             'side dish' : 'https://www.paleorunningmomma.com/course/veggies-sides/'
         },
-        'Skinny Taste' : {
+        'Skinny Taste 1 of 2' : {
             'regex' : r'h2 class="entry-title"><a href="(\S*)"',
             'main course' : 'https://www.skinnytaste.com/recipe-index/?_course=dinner-recipes',
             'side dish' : 'https://www.skinnytaste.com/recipe-index/?_course=side-dishes'
         },
-        'Skinny Taste' : {
+        'Skinny Taste 2 of 2' : {
             'regex' : r'h3 class="entry-title(?: ast-blog-single-element)*"><a href="(\S*)"(?: rel="bookmark")*',
             'main course' : 'https://www.skinnytaste.com/recipes/dinner-recipes/',
             'side dish' : 'https://www.skinnytaste.com/recipes/side-dishes/',
