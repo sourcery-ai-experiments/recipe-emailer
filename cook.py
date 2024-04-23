@@ -7,6 +7,7 @@ import smtplib
 import ssl
 import sys
 import time
+from collections import defaultdict
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -34,16 +35,17 @@ def check_debug_mode() -> bool:
 # if in debug mode, tell the user what keys (website title) are in the dictonary along with their index
 def debug_list_selection() -> dict:
     print("The websites list supports the following sites:")
-    for website in WEBSITES:
+    websites_keys = list(WEBSITES.keys())
+    for website in websites_keys:
         # note we increment by 1 to make output more user-friendly
-        print(f"{list(WEBSITES.keys()).index(website)+1}\t{website}")
+        print(f"{websites_keys.index(website)+1}\t{website}")
     while True:
         try:
             # prompt user to enter the index of the list they wish to debug
             number = int(input("Which website would you like to debug? (#) "))
             # only accept input that would fall within the indicies of
             # the dictionary. Recall the increment
-            if 0 < number < len(WEBSITES.keys()) + 1:
+            if 1 <= number <= len(websites_keys):
                 # account for the increment when saving user selection
                 selection = list(WEBSITES)[number - 1]
                 break
@@ -84,9 +86,35 @@ def is_file_old(filename: str, age: int) -> bool:
     return True
 
 
+def remove_duplicates(urls):
+    seen = set()
+    return [url for url in urls if not (url in seen or seen.add(url))]
+
+
+def remove_already_scraped(urls, used_recipes):
+    return [url for url in urls if url not in used_recipes.keys()]
+
+
+def remove_known_failures(urls, failed_recipes):
+    return [url for url in urls if url not in failed_recipes.keys()]
+
+
+def scrape_urls(urls, scraper, unused_recipes):
+    for url in tqdm(urls):
+        recipe_elements = scraper(url)
+        if recipe_elements is not None:
+            unused_recipes[url] = recipe_elements
+
+
 def get_fresh_data(websites: dict) -> tuple:
-    # GET LATEST URLS FROM HTML, separating entrees and sides
+    unused_main_recipes = defaultdict(list)
+    unused_side_recipes = defaultdict(list)
+    used_recipes = {}
+    failed_recipes = {}
+
     main_urls, side_urls = [], []
+
+    # GET LATEST URLS FROM HTML, separating entrees and sides
     print("Getting HTML")
     for site_info in tqdm(websites.values()):
         fresh_main_urls, fresh_side_urls = get_recipe_urls(site_info)
@@ -95,38 +123,33 @@ def get_fresh_data(websites: dict) -> tuple:
 
     # REMOVE DUPLICATES
     print("Removing duplicate urls")
-    main_urls = list(set(main_urls))
-    side_urls = list(set(side_urls))
+    main_urls = remove_duplicates(main_urls)
+    side_urls = remove_duplicates(side_urls)
 
     # REMOVE URLS ALREADY SCRAPED
     print("Removing urls already scraped")
-    main_urls = [url for url in main_urls if url not in unused_main_recipes.keys()]
-    side_urls = [url for url in side_urls if url not in unused_side_recipes.keys()]
+    main_urls = remove_already_scraped(main_urls, used_recipes)
+    side_urls = remove_already_scraped(side_urls, used_recipes)
 
     # REMOVE URLS ALREADY SENT
     print("Removing urls already sent")
-    main_urls = [url for url in main_urls if url not in used_recipes.keys()]
-    side_urls = [url for url in side_urls if url not in used_recipes.keys()]
+    main_urls = remove_already_scraped(main_urls, used_recipes)
+    side_urls = remove_already_scraped(side_urls, used_recipes)
 
     # REMOVE URLS THAT FAIL
     print("Removing URLs known to fail")
-    main_urls = [url for url in main_urls if url not in failed_recipes.keys()]
-    side_urls = [url for url in side_urls if url not in failed_recipes.keys()]
+    main_urls = remove_known_failures(main_urls, failed_recipes)
+    side_urls = remove_known_failures(side_urls, failed_recipes)
     print(f"main {len(main_urls)} new\nside {len(side_urls)} new")
 
     # USE HHURSEV'S RECIPE SCRAPER
-    if len(main_urls) > 0:
+    if main_urls:
         print("Scraping main course urls")
-        for url in tqdm(main_urls):
-            recipe_elements = scraper(url)
-            if recipe_elements is not None:
-                unused_main_recipes[url] = recipe_elements
-    if len(side_urls) > 0:
+        scrape_urls(main_urls, scraper, unused_main_recipes)
+    if side_urls:
         print("Scraping side dish urls")
-        for url in tqdm(side_urls):
-            recipe_elements = scraper(url)
-            if recipe_elements is not None:
-                unused_side_recipes[url] = recipe_elements
+        scrape_urls(side_urls, scraper, unused_side_recipes)
+
     print(f"main {len(unused_main_recipes)}\nside {len(unused_side_recipes)}")
     return unused_main_recipes, unused_side_recipes
 
@@ -157,26 +180,31 @@ def get_html(website: str) -> str:
     return response.text
 
 
-def cleanup_recipe_urls(urls: list) -> NoReturn:
-    for url in urls:
-        # fix bad entries
-        if url.lower()[:9] == "/recipes/":
+def cleanup_recipe_urls(urls: list) -> None:
+    # Fix bad entries
+    for url in urls[:]:
+        if url.lower().startswith("/recipes/"):
             index = urls.index(url)
             urls[index] = f"https://www.leanandgreenrecipes.net{url}"
-        # remove bad entries
-        if (
-            ("plan" in url.lower() or "eggplant" in url.lower())
-            or (
-                "dishes" in url.lower()
-                and ("/recipes/" in url.lower() or "best" in url.lower())
-            )
-            or ("black" in url.lower() and "friday" in url.lower())
-            or ("how" in url.lower() and "use" in url.lower())
-            or ("dishes" in url.lower() or "ideas" in url.lower())
-            or "30-whole30-meals-in-30-minutes" in url.lower()
-            or "guide" in url.lower()
-        ):
-            urls.remove(url)
+
+    # Remove bad entries
+    bad_keywords = [
+        "plan",
+        "eggplant",
+        "dishes",
+        "best",
+        "black friday",
+        "how",
+        "use",
+        "ideas",
+        "30-whole30-meals-in-30-minutes",
+        "guide",
+    ]
+    urls[:] = [
+        url
+        for url in urls
+        if not any(keyword in url.lower() for keyword in bad_keywords)
+    ]
 
 
 def scraper(url: str) -> dict:
@@ -217,42 +245,50 @@ def scraper(url: str) -> dict:
     return recipe_elements
 
 
+def categorize_recipe(recipe):
+    seafood_keywords = ["scallops", "salmon", "shrimp", "tuna"]
+    landfood_keywords = ["chickpea", "chicken", "turkey", "pork", "tofu"]
+
+    seafood = any(
+        keyword in ingredient.lower()
+        for ingredient in recipe["ingredients"]
+        for keyword in seafood_keywords
+    )
+    landfood = any(
+        keyword in ingredient.lower()
+        for ingredient in recipe["ingredients"]
+        for keyword in landfood_keywords
+    )
+
+    return seafood, landfood
+
+
 def get_random_proteins(recipes: dict) -> list:
-    # randomizing recipe selection
-    seafood, landfood = [], []
-    for recipe in recipes.items():
+    seafood_recipes = []
+    landfood_recipes = []
+
+    for recipe_name, recipe in recipes.items():
         try:
-            for i in recipe[1]["ingredients"]:
-                i = i.lower()
-                if "scallops" in i or "salmon" in i or "shrimp" in i or "tuna" in i:
-                    seafood.append({recipe[0]: recipe[1]})
-                elif (
-                    "chickpea" in i
-                    or "chicken" in i
-                    or "turkey" in i
-                    or "pork" in i
-                    or "tofu" in i
-                ):
-                    landfood.append({recipe[0]: recipe[1]})
-                else:
-                    pass
+            seafood, landfood = categorize_recipe(recipe)
+            if seafood:
+                seafood_recipes.append({recipe_name: recipe})
+            elif landfood:
+                landfood_recipes.append({recipe_name: recipe})
         except TypeError:
-            print(f"needs removed: {recipe}, not valid recipe")
-    # shuffle the lists
-    random.shuffle(landfood)
-    random.shuffle(seafood)
-    # select three main courses at random
-    if len(landfood) > 1 and len(seafood) > 0:
-        landfood = random.sample(landfood, 2)
-        seafood = random.sample(seafood, 1)
-    elif len(landfood) > 2 and len(seafood) == 0:
-        landfood = random.sample(landfood, 3)
-    else:
+            print(f"needs removed: {recipe_name}, not valid recipe")
+
+    if not seafood_recipes or len(landfood_recipes) < 3:
         print(
-            "Somehow we ended up with no seafood meals and two or less "
-            "landfood meals. Can't do anything with nothing. Exiting."
+            "Somehow we ended up with no seafood meals or less than three landfood meals. Can't do anything with nothing."
         )
-        sys.exit()
+        return []
+
+    random.shuffle(landfood_recipes)
+    random.shuffle(seafood_recipes)
+
+    landfood = random.sample(landfood_recipes, min(len(landfood_recipes), 3))
+    seafood = random.sample(seafood_recipes, 1)
+
     return landfood + seafood
 
 
