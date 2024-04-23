@@ -19,7 +19,8 @@ from recipe_scrapers import scrape_me
 from tqdm import tqdm
 
 # IMPORT LISTS
-from lists import veggies, websites
+from lists import veggies as VEGGIES
+from lists import websites as WEBSITES
 
 
 # check for debug mode or default to full mode
@@ -384,7 +385,7 @@ DEBUG_MODE = check_debug_mode()
 if DEBUG_MODE:
     SELECTION = debug_list_selection()
     # redifine websites list for debug session
-    websites = {"debugging": SELECTION}
+    WEBSITES = {"debugging": SELECTION}
     unused_main_recipes, unused_side_recipes, scraped_mains, scraped_sides = (
         {},
         {},
@@ -405,7 +406,7 @@ else:
     if is_file_old(unused_mains_filename, 12):
         print(f'"{unused_mains_filename}" is old, getting fresh data')
         # SCRAPE FRESH DATA IF EXISTING DATA IS OLD
-        unused_main_recipes, unused_side_recipes = get_fresh_data(websites)
+        unused_main_recipes, unused_side_recipes = get_fresh_data(WEBSITES)
         save_json(unused_mains_filename, unused_main_recipes)
         save_json(unused_sides_filename, unused_side_recipes)
 
@@ -415,7 +416,7 @@ else:
 
     # ENSURE MEALS HAVE ADEQUATE VEGGIES OR ADD A SIDE
     print("Checking for veggies")
-    MEALS = veggie_checker(randomized_meals, unused_side_recipes)
+    MEALS = veggie_checker(randomized_meals, unused_side_recipes, VEGGIES)
 
     # PRETTYIFY THE MEALS INTO EMAILABLE HTML BODY
     print("Prettifying meals into HTML")
