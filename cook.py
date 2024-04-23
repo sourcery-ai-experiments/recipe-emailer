@@ -99,7 +99,7 @@ def remove_known_failures(urls, failed_recipes):
     return [url for url in urls if url not in failed_recipes.keys()]
 
 
-def scrape_urls(urls, scraper, unused_recipes):
+def scrape_urls(urls, unused_recipes):
     for url in tqdm(urls):
         recipe_elements = scraper(url)
         if recipe_elements is not None:
@@ -145,10 +145,10 @@ def get_fresh_data(websites: dict) -> tuple:
     # USE HHURSEV'S RECIPE SCRAPER
     if main_urls:
         print("Scraping main course urls")
-        scrape_urls(main_urls, scraper, unused_main_recipes)
+        scrape_urls(main_urls, unused_main_recipes)
     if side_urls:
         print("Scraping side dish urls")
-        scrape_urls(side_urls, scraper, unused_side_recipes)
+        scrape_urls(side_urls, unused_side_recipes)
 
     print(f"main {len(unused_main_recipes)}\nside {len(unused_side_recipes)}")
     return unused_main_recipes, unused_side_recipes
@@ -236,10 +236,10 @@ def scraper(url: str) -> dict:
         if recipe_elements["image"] is None:
             raise AssertionError
     except AssertionError:
-        failed_recipes[url] = "FAILS"
+        FAILED_RECIPES[url] = "FAILS"
         return None
     except Exception:
-        failed_recipes[url] = "FAILS"
+        FAILED_RECIPES[url] = "FAILS"
         return None
     # Everything passes, return the elements
     return recipe_elements
@@ -376,7 +376,7 @@ def prettify(meals: dict, start: float) -> str:
     pretty = (
         f"{html}"
         f'\t\t<p style="color: #888;text-align: center;">Wowza! We found '
-        f"{len(unused_main_recipes) + len(unused_side_recipes)} recipes! These {len(meals)} were "
+        f"{len(UNUSED_MAIN_RECIPES) + len(UNUSED_SIDE_RECIPES)} recipes! These {len(meals)} were "
         f"selected at random for your convenience and your family's delight. "
         f"It took {elapsed_time} to do this using v14."
         f"</p>\n</body>\n</html>"
@@ -412,47 +412,47 @@ def mailer(content: str, debug_mode: bool) -> NoReturn:
 START_TIME = time.time()
 
 # FILENAME CONSTANTS
-unused_mains_filename = "unused_mains_recipes.json"
-unused_sides_filename = "unused_sides_recipes.json"
-failed_filename = "failed_recipes.json"
-used_filename = "used_recipes.json"
+UNUSED_MAINS_FILENAME = "unused_mains_recipes.json"
+UNUSED_SIDES_FILENAME = "unused_sides_recipes.json"
+FAILED_FILENAME = "failed_recipes.json"
+USED_FILENAME = "used_recipes.json"
 
 DEBUG_MODE = check_debug_mode()
 if DEBUG_MODE:
     SELECTION = debug_list_selection()
     # redifine websites list for debug session
     WEBSITES = {"debugging": SELECTION}
-    unused_main_recipes, unused_side_recipes, scraped_mains, scraped_sides = (
+    UNUSED_MAIN_RECIPES, UNUSED_SIDE_RECIPES, scraped_mains, scraped_sides = (
         {},
         {},
         {},
         {},
     )
-    unused_main_recipes = load_json(unused_mains_filename)
+    UNUSED_MAIN_RECIPES = load_json(UNUSED_MAINS_FILENAME)
 
 else:
     # LOAD PREVIOUSLY COLLECTED DATA
     print("Loading previously collected data")
-    unused_main_recipes = load_json(unused_mains_filename)
-    unused_side_recipes = load_json(unused_sides_filename)
-    failed_recipes = load_json(failed_filename)
-    used_recipes = load_json(used_filename)
+    UNUSED_MAIN_RECIPES = load_json(UNUSED_MAINS_FILENAME)
+    UNUSED_SIDE_RECIPES = load_json(UNUSED_SIDES_FILENAME)
+    FAILED_RECIPES = load_json(FAILED_FILENAME)
+    USED_RECIPES = load_json(USED_FILENAME)
 
     # CHECK RECENCY OF PREVIOUSLY COLLECTED DATA
-    if is_file_old(unused_mains_filename, 12):
-        print(f'"{unused_mains_filename}" is old, getting fresh data')
+    if is_file_old(UNUSED_MAINS_FILENAME, 12):
+        print(f'"{UNUSED_MAINS_FILENAME}" is old, getting fresh data')
         # SCRAPE FRESH DATA IF EXISTING DATA IS OLD
-        unused_main_recipes, unused_side_recipes = get_fresh_data(WEBSITES)
-        save_json(unused_mains_filename, unused_main_recipes)
-        save_json(unused_sides_filename, unused_side_recipes)
+        UNUSED_MAIN_RECIPES, UNUSED_SIDE_RECIPES = get_fresh_data(WEBSITES)
+        save_json(UNUSED_MAINS_FILENAME, UNUSED_MAIN_RECIPES)
+        save_json(UNUSED_SIDES_FILENAME, UNUSED_SIDE_RECIPES)
 
     # SORT BY PROTEIN AND RETURN LIST OF THREE RANDOM MEALS
     print("Getting meals with select proteins at random")
-    randomized_meals = get_random_proteins(unused_main_recipes)
+    randomized_meals = get_random_proteins(UNUSED_MAIN_RECIPES)
 
     # ENSURE MEALS HAVE ADEQUATE VEGGIES OR ADD A SIDE
     print("Checking for veggies")
-    MEALS = veggie_checker(randomized_meals, unused_side_recipes, VEGGIES)
+    MEALS = veggie_checker(randomized_meals, UNUSED_SIDE_RECIPES, VEGGIES)
 
     # PRETTYIFY THE MEALS INTO EMAILABLE HTML BODY
     print("Prettifying meals into HTML")
@@ -467,22 +467,22 @@ else:
     for MEAL in MEALS:
         try:
             URL = next(iter(MEAL["obj"]))
-            used_recipes[URL] = date
-            if URL in unused_main_recipes:
-                del unused_main_recipes[URL]
-            elif URL in unused_side_recipes:
-                del unused_side_recipes[URL]
+            USED_RECIPES[URL] = date
+            if URL in UNUSED_MAIN_RECIPES:
+                del UNUSED_MAIN_RECIPES[URL]
+            elif URL in UNUSED_SIDE_RECIPES:
+                del UNUSED_SIDE_RECIPES[URL]
             else:
                 raise KeyError
         except KeyError:
             print(f"{URL} was not in the main or side lists, so not removing")
     print(
-        f"main {len(unused_main_recipes)} final\nside {len(unused_side_recipes)} final"
+        f"main {len(UNUSED_MAIN_RECIPES)} final\nside {len(UNUSED_SIDE_RECIPES)} final"
     )
 
     # SAVE OUT DICTIONARIES AS FILES FOR REUSE
     print("Saving out files")
-    save_json(unused_mains_filename, unused_main_recipes)
-    save_json(unused_sides_filename, unused_side_recipes)
-    save_json(failed_filename, failed_recipes)
-    save_json(used_filename, used_recipes)
+    save_json(UNUSED_MAINS_FILENAME, UNUSED_MAIN_RECIPES)
+    save_json(UNUSED_SIDES_FILENAME, UNUSED_SIDE_RECIPES)
+    save_json(FAILED_FILENAME, FAILED_RECIPES)
+    save_json(USED_FILENAME, USED_RECIPES)
