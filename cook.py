@@ -1,40 +1,40 @@
 # IMPORT STANDARD MODULES
+import argparse
 import json
 import os
 import random
 import re
 import smtplib
 import ssl
-import sys
 import time
 from collections import defaultdict
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import NoReturn
 
 # IMPORT THIRD-PARTY MODULES
 import requests
 from dotenv import load_dotenv
-from recipe_scrapers import scrape_me
 from tqdm import tqdm
 
 # IMPORT LISTS
 from lists import veggies as VEGGIES
 from lists import websites as WEBSITES
+from recipe_scrapers import scrape_me
 
 # VERSION TAG
-version = 14
+version = 14.1
 
 
 # check for debug mode or default to full mode
 def check_debug_mode() -> bool:
-    try:
-        if len(sys.argv) != 1 and sys.argv[1] == "-d" or sys.argv[1] == "--debug":
-            print("debug mode detected")
-            return True
-    except IndexError:
-        pass
+    parser = argparse.ArgumentParser(description="Check for debug mode")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
+    args = parser.parse_args()
+
+    if args.debug:
+        print("Debug mode detected")
+        return True
     return False
 
 
@@ -65,12 +65,13 @@ def debug_list_selection() -> dict:
     return WEBSITES[selection]
 
 
-# OPENING RESOURCE FILES
-def save_json(filename: str, data: dict) -> NoReturn:
+# SAVE RESOURCE FILES
+def save_json(filename: str, data: dict) -> None:
     with open(filename, "w") as f:
         json.dump(data, f, indent=2)
 
 
+# OPEN RESOURCE FILES
 def load_json(filename: str) -> dict:
     try:
         with open(filename) as f:
@@ -180,10 +181,12 @@ def get_html(website: str) -> str:
                 chrome/50.0.2661.102 safari/537.36"
     }
     try:
-        response = requests.get(website, headers=h, timeout=5)
+        with requests.get(website, headers=h, timeout=5) as response:
+            return response.text
     except requests.exceptions.Timeout:
+        # Handle timeout gracefully
         print(f"{website} timed out. skipping.")
-    return response.text
+        return None
 
 
 def cleanup_recipe_urls(urls: list) -> None:
@@ -213,28 +216,26 @@ def cleanup_recipe_urls(urls: list) -> None:
     ]
 
 
-def scraper(url: str) -> dict:
+def scraper(url: str) -> dict | None:
     # scrapes URL and returns hhursev recipe_scraper elements
     try:
         scrape = scrape_me(url)
         recipe_elements = scrape.to_json()
-        # replace returned canonical_url with the URL used as input for
-        # the scraper if the two differ
+        # Replace returned canonical_url with the input URL if they differ
         if recipe_elements["canonical_url"] != url:
             recipe_elements["canonical_url"] = url
         # Verify recipe_elements are valid before returning
-        if "title" not in recipe_elements:
-            raise AssertionError
-        if "site_name" not in recipe_elements:
-            raise AssertionError
-        if "host" not in recipe_elements:
-            raise AssertionError
-        if "ingredients" not in recipe_elements:
-            raise AssertionError
-        if "instructions" not in recipe_elements:
-            raise AssertionError
-        if "image" not in recipe_elements:
-            raise AssertionError
+        required_keys = [
+            "title",
+            "site_name",
+            "host",
+            "ingredients",
+            "instructions",
+            "image",
+        ]
+        for key in required_keys:
+            if key not in recipe_elements:
+                raise AssertionError
         if recipe_elements["ingredients"] == []:
             raise AssertionError
         if recipe_elements["instructions"] == "":
@@ -242,7 +243,7 @@ def scraper(url: str) -> dict:
         if recipe_elements["image"] is None:
             raise AssertionError
     except AssertionError:
-        FAILED_RECIPES[url] = "FAILS"
+        FAILED_RECIPES[url] = "FAILS ASSERTIONS"
         return None
     except Exception:
         FAILED_RECIPES[url] = "FAILS"
@@ -390,7 +391,7 @@ def prettify(meals: dict, start: float) -> str:
     return pretty
 
 
-def mailer(content: str, debug_mode: bool) -> NoReturn:
+def mailer(content: str, debug_mode: bool) -> None:
     """Function emails pretty formatted meals to recipents, can do BCC
     https://www.justintodata.com/send-email-using-python-tutorial/
     https://docs.python.org/3/library/email.examples.html"""
@@ -445,6 +446,7 @@ else:
     USED_RECIPES = load_json(USED_FILENAME)
 
     # CHECK RECENCY OF PREVIOUSLY COLLECTED DATA
+    # for this instance, files are considered old after 12 hours
     if is_file_old(UNUSED_MAINS_FILENAME, 12):
         print(f'"{UNUSED_MAINS_FILENAME}" is old, getting fresh data')
         # SCRAPE FRESH DATA IF EXISTING DATA IS OLD
