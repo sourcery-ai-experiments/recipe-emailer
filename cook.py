@@ -431,9 +431,9 @@ else:
         try:
             URL = next(iter(MEAL["obj"]))
             used_recipes[URL] = date
-            if url in unused_main_recipes:
+            if URL in unused_main_recipes:
                 del unused_main_recipes[URL]
-            elif url in unused_side_recipes:
+            elif URL in unused_side_recipes:
                 del unused_side_recipes[URL]
             else:
                 raise KeyError
